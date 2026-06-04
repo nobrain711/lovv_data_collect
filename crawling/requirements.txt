@@ -1,0 +1,2 @@
+# This crawler currently uses only Python standard library modules.
+# No external pip packages are required for the JP Wikipedia crawler.
