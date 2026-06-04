@@ -15,7 +15,7 @@ from pathlib import Path
 from crawling.JP.models import CityRecord, NormalizedRecord, PrefectureRecord
 from crawling.JP.normalizer import build_city_record, build_prefecture_record
 from crawling.JP.prefectures import find_prefecture
-from crawling.JP.wikipedia_client import MediaWikiClient, WikipediaClient, first_page
+from crawling.JP.wikipedia_client import WikipediaClient, WikipediaHtmlClient, first_page
 
 
 TOKYO_PREFECTURE_ID = "JP-13"
@@ -62,7 +62,7 @@ def acquire_city_data(
     client: WikipediaClient | None = None,
     source_lang: str = "ko",
 ) -> tuple[list[PrefectureRecord], list[CityRecord]]:
-    wikipedia = client or MediaWikiClient()
+    wikipedia = client or WikipediaHtmlClient()
     collected_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
     city_records: list[CityRecord] = []
     prefectures_by_id: dict[str, PrefectureRecord] = {}

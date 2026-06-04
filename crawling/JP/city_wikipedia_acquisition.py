@@ -14,6 +14,7 @@ from pathlib import Path
 from crawling.JP.normalizer import build_city_record
 from crawling.JP.pipeline import acquire_city_data, load_targets
 from crawling.JP.prefectures import detect_prefecture
+from crawling.JP.wikipedia_client import MediaWikiClient, WikipediaHtmlClient
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -23,6 +24,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--lang", default="ko", help="Source Wikipedia language for positional or string targets.")
     parser.add_argument("--default-prefecture-id", default="", help="Fallback prefecture id for trusted target lists.")
     parser.add_argument("--output-dir", type=Path, default=Path("data/JP"))
+    parser.add_argument(
+        "--fetcher",
+        choices=("html", "api"),
+        default="html",
+        help="Wikipedia fetcher implementation. HTML is the default to avoid MediaWiki API timeout issues.",
+    )
     return parser.parse_args(argv)
 
 
@@ -37,7 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     if not titles:
         print("Provide city titles as arguments or with --input.", file=sys.stderr)
         return 2
-    acquire_city_data(titles=titles, output_dir=args.output_dir, source_lang=args.lang)
+    client = WikipediaHtmlClient() if args.fetcher == "html" else MediaWikiClient()
+    acquire_city_data(titles=titles, output_dir=args.output_dir, client=client, source_lang=args.lang)
     return 0
 
 

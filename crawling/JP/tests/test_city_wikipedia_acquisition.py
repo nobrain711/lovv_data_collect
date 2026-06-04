@@ -14,6 +14,7 @@ from crawling.JP.city_wikipedia_acquisition import (
     detect_prefecture,
 )
 from crawling.JP.pipeline import PageTarget, collect_pages
+from crawling.JP.wikipedia_client import WikipediaHtmlClient, parse_wikipedia_html
 
 
 class FakeWikipediaClient:
@@ -266,6 +267,100 @@ class BatchCoordinateAndLanglinkOmittingClient(FakeWikipediaClient):
 
 
 class CityWikipediaAcquisitionTest(unittest.TestCase):
+    def test_html_client_uses_requests_session_for_page_fetching(self) -> None:
+        class FakeResponse:
+            text = "<html><body><h1 id=\"firstHeading\">지요다구</h1><div class=\"mw-parser-output\"><p>지요다구는 일본 도쿄도의 특별구이다.</p></div></body></html>"
+
+            def raise_for_status(self) -> None:
+                return None
+
+        class FakeSession:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, dict[str, str], int]] = []
+
+            def get(self, url: str, headers: dict[str, str], timeout: int) -> FakeResponse:
+                self.calls.append((url, headers, timeout))
+                return FakeResponse()
+
+        session = FakeSession()
+        client = WikipediaHtmlClient(session=session, request_delay_seconds=0, timeout=7)
+
+        payload = client.fetch_page("ko", "지요다구")
+
+        page = payload["query"]["pages"][0]
+        self.assertEqual("지요다구", page["title"])
+        self.assertEqual("지요다구는 일본 도쿄도의 특별구이다.", page["extract"])
+        self.assertEqual(1, len(session.calls))
+        self.assertIn("ko.wikipedia.org/wiki/", session.calls[0][0])
+        self.assertEqual(7, session.calls[0][2])
+
+    def test_parse_wikipedia_html_extracts_lead_coordinates_links_and_sections(self) -> None:
+        html = """
+        <html>
+          <body>
+            <h1 id="firstHeading">지요다구</h1>
+            <div class="mw-parser-output"><span class="geo-dec">0; 0</span></div>
+            <div id="mw-content-text">
+              <div class="mw-parser-output">
+                <p><b>지요다구</b>는 일본 도쿄도의 특별구 가운데 하나이다.</p>
+                <p><style>.mw-parser-output .templateruby{font-size:85%}</style>문장 안의 style은 제거되어야 한다.</p>
+                <p>일본의 주요 기관들이 이 지역에 있다.</p>
+                <span class="geo-dec">35.693944; 139.753611</span>
+                <h2><span class="mw-headline" id="지리">지리</span></h2>
+                <p>지요다구는 도쿄 중앙의 심장부에 위치해 있다.</p>
+                <h2><span class="mw-headline" id="기후">기후</span></h2>
+                <p>온난 습윤 기후에 속한다.</p>
+                <p><a class="external text" href="https://www.city.chiyoda.lg.jp/">공식 사이트</a></p>
+              </div>
+            </div>
+            <a href="/wiki/千代田区" hreflang="ja">日本語</a>
+            <a href="/wiki/Chiyoda,_Tokyo" hreflang="en">English</a>
+          </body>
+        </html>
+        """
+
+        page = parse_wikipedia_html("ko", "지요다구", html)
+
+        self.assertEqual("지요다구", page["title"])
+        self.assertEqual(
+            "지요다구는 일본 도쿄도의 특별구 가운데 하나이다.\n\n문장 안의 style은 제거되어야 한다.\n\n일본의 주요 기관들이 이 지역에 있다.",
+            page["extract"],
+        )
+        self.assertEqual([{"lat": 35.693944, "lon": 139.753611}], page["coordinates"])
+        self.assertEqual([{"url": "https://www.city.chiyoda.lg.jp/"}], page["extlinks"])
+        self.assertIn({"lang": "ja", "title": "千代田区"}, page["langlinks"])
+        content = page["revisions"][0]["slots"]["main"]["content"]
+        self.assertIn("== 지리 ==\n지요다구는 도쿄 중앙의 심장부에 위치해 있다.", content)
+        self.assertIn("== 기후 ==\n온난 습윤 기후에 속한다.", content)
+
+    def test_parse_wikipedia_html_supports_parsoid_section_layout(self) -> None:
+        html = """
+        <html>
+          <body>
+            <h1 id="firstHeading">지요다구</h1>
+            <div id="mw-content-text">
+              <div class="mw-parser-output">
+                <section data-mw-section-id="0">
+                  <table class="infobox"><tr><td>표 내용</td></tr></table>
+                  <p><b>지요다구</b>는 일본 도쿄도의 특별구 가운데 하나이다.</p>
+                  <span class="geo-dec">35.693944; 139.753611</span>
+                </section>
+                <section data-mw-section-id="3" aria-labelledby="지리">
+                  <div class="mw-heading mw-heading2"><h2 id="지리">지리</h2></div>
+                  <p>지요다구는 도쿄 중앙의 심장부에 위치해 있다.</p>
+                </section>
+              </div>
+            </div>
+          </body>
+        </html>
+        """
+
+        page = parse_wikipedia_html("ko", "지요다구", html)
+
+        self.assertEqual("지요다구는 일본 도쿄도의 특별구 가운데 하나이다.", page["extract"])
+        self.assertEqual([{"lat": 35.693944, "lon": 139.753611}], page["coordinates"])
+        self.assertIn("== 지리 ==\n지요다구는 도쿄 중앙의 심장부에 위치해 있다.", page["revisions"][0]["slots"]["main"]["content"])
+
     def test_detect_prefecture_from_korean_text(self) -> None:
         prefecture = detect_prefecture(["가나자와시는 일본 이시카와현의 도시이다."])
 

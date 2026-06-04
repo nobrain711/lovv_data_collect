@@ -15,6 +15,7 @@ The scope is limited to City acquisition only. It does not define collection req
 
 - Target country for this spec is Japan.
 - The first implementation target is limited to Tokyo Metropolis.
+- The crawler runtime target is Python 3.12.
 - City unit means Japanese municipality-level destination data, mainly city, town, village, ward, or comparable small destination unit.
 - The initial source of truth is `docs/japan_data_acquisition_plan.md`.
 - This spec prepares implementation requirements only. It does not implement a crawler.
@@ -53,6 +54,12 @@ The scope is limited to City acquisition only. It does not define collection req
 | 2 | Wikidata | Coordinates, multilingual names, identifiers | Use only as a secondary source when Wikipedia is missing or ambiguous. |
 | 3 | e-Stat / Statistical LOD | Administrative area metadata and codes | Use only for city normalization and disambiguation when Wikipedia is insufficient. |
 | 4 | Official municipality or tourism site | Official site URL and manual verification | Use as verification or fallback. Store up to two official or tourism site URLs when available. |
+
+## Collection Method
+
+- Large or repeated collection runs should use HTML parsing with `requests` and `BeautifulSoup(bs4)` as the default method.
+- The MediaWiki API should be used selectively for small repairs, linked-page checks, or precise lookups such as coordinates and multilingual names when HTML parsing is insufficient.
+- API timeouts, rate limits, or missing batch fields must not stop the full collection run. The workflow should normalize HTML results first and mark only insufficient fields for later repair.
 
 ## Data Requirements
 

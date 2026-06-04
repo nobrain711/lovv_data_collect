@@ -1,2 +1,3 @@
-# This crawler currently uses only Python standard library modules.
-# No external pip packages are required for the JP Wikipedia crawler.
+# Runtime: Python 3.12
+beautifulsoup4>=4.12,<5
+requests>=2.31,<3
