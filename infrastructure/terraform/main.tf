@@ -233,6 +233,7 @@ data "archive_file" "kr_pipeline_lambda" {
 resource "aws_lambda_function" "kr_transformer" {
   # PRD의 kr-transformer를 수동 실행 가능한 스모크 함수로 먼저 배포합니다.
   function_name    = local.lambda_names.transformer
+  description      = "KR transformer smoke Lambda (manual invoke)"
   role             = aws_iam_role.pipeline_lambda_role.arn
   handler          = "kr_details_pipeline.handlers.transformer_handler.handler"
   runtime          = "python3.12"
@@ -243,7 +244,7 @@ resource "aws_lambda_function" "kr_transformer" {
 
   environment {
     variables = {
-      RAW_PREFIX       = var.raw_data_prefix
+      RAW_PREFIX       = "${var.raw_data_prefix}/details"
       PROCESSED_PREFIX = var.processed_data_prefix
     }
   }
@@ -255,6 +256,7 @@ resource "aws_lambda_function" "kr_transformer" {
 
 resource "aws_lambda_function" "kr_loader" {
   function_name    = local.lambda_names.loader
+  description      = "KR loader Lambda for phase1"
   role             = aws_iam_role.pipeline_lambda_role.arn
   handler          = "kr_details_pipeline.handlers.loader_handler.handler"
   runtime          = "python3.12"
@@ -265,8 +267,9 @@ resource "aws_lambda_function" "kr_loader" {
 
   environment {
     variables = {
-      PROCESSED_PREFIX = var.processed_data_prefix
-      DYNAMODB_TABLE   = var.dynamodb_table_name
+      DEBUG_LOAD_FAILURES = "1"
+      PROCESSED_PREFIX    = var.processed_data_prefix
+      DYNAMODB_TABLE      = var.dynamodb_table_name
     }
   }
 

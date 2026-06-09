@@ -1,107 +1,253 @@
-# SKN26 Project Template Repository
+# Lovv Data Collect
 
-SKN26 4차 프로젝트부터 최종 프로젝트까지 공통으로 사용할 수 있는 템플릿 저장소입니다.
+Lovv 서비스에서 사용할 도시, 관광지, 축제 데이터를 수집하고 AWS에 적재하기 위한 데이터 수집/파이프라인 저장소입니다.
 
-아직 기술 스택은 확정하지 않았으며, 프로젝트를 시작할 때 필요한 기본 디렉터리, 문서, 협업 규칙을 먼저 정리하는 것을 목적으로 합니다.
+현재 저장소는 한국(KR) 데이터를 중심으로 다음 흐름까지 구현되어 있습니다.
 
-## Purpose
+1. Wikipedia 및 TourAPI 기반 도시/상세 데이터 취득 보조 코드
+2. `data/KR/details/*.json` 원본을 S3 Raw 영역에 업로드
+3. Raw JSON을 서비스 적재 후보 데이터로 변환
+4. 변환 결과를 DynamoDB `TourKoreaData`에 적재하는 로더
+5. Terraform 기반 S3, DynamoDB, IAM, Lambda 배포 구성
 
-- 4차 프로젝트부터 최종 프로젝트까지 반복해서 사용할 기본 저장소 구조를 제공합니다.
-- 프로젝트별 기술 스택이 달라져도 공통으로 필요한 문서와 협업 규칙을 유지합니다.
-- Git flow, commit convention, naming, code style, API contract, development process를 wiki로 관리합니다.
-- 팀원이 새 프로젝트에 합류했을 때 저장소 사용 기준을 빠르게 확인할 수 있게 합니다.
+## Overview
 
-## Project Scope
+이 저장소는 PRD와 Spec을 기준으로 Phase 0, Phase 1 범위를 나누어 개발 중입니다.
 
-이 템플릿은 다음 프로젝트 구간에서 사용합니다.
+- **Phase 0:** Terraform으로 S3 Raw 저장소, DynamoDB 테이블, Lambda 실행 권한, CloudWatch Log Group을 구성합니다.
+- **Phase 1:** 수집된 KR 상세 JSON을 S3 Raw에 보존하고, Transform/Load 단계를 통해 DynamoDB 적재 가능한 형태로 처리합니다.
 
-- SKN26 4차 프로젝트
-- SKN26 최종 프로젝트
+수집 데이터 원본은 로컬 생성 산출물 또는 참조 레포 산출물을 사용합니다. 현재 참조 레포는 `Gloveman/tour-api-korea`입니다.
 
 ## Tech Stack
 
-기술 스택은 프로젝트별 요구사항에 따라 결정합니다.
+- **Language:** Python 3.12
+- **Package manager:** uv
+- **Crawler libraries:** requests, beautifulsoup4
+- **AWS SDK:** boto3
+- **Infrastructure:** Terraform
+- **AWS services:** S3, DynamoDB, Lambda, IAM, CloudWatch Logs
+- **Testing:** pytest
 
-확정 후 이 영역에 다음 내용을 업데이트합니다.
-
-- Backend:
-- Frontend:
-- Database:
-- AI / Model:
-- Infra:
-- Collaboration:
-
-## Structure
+## Project Structure
 
 ```text
 .
-├── .github/
-│   └── workflows/
-├── backend/
-├── frontend/
-├── database/
-├── models/
+├── crawling/
+│   ├── JP/
+│   ├── KR/
+│   ├── pyproject.toml
+│   └── uv.lock
+├── data/
+│   ├── JP/
+│   └── KR/
 ├── docs/
+│   └── specs/
+├── infrastructure/
+│   └── terraform/
+├── src/
+│   └── kr_details_pipeline/
 ├── wiki/
-│   ├── book.toml
-│   └── src/
-│       ├── SUMMARY.md
-│       ├── overview.md
-│       ├── conventions.md
-│       └── conventions/
-│           ├── git-flow.md
-│           ├── commit.md
-│           ├── naming.md
-│           └── code-style.md
-├── README.md
-└── LICENSE
+├── pyproject.toml
+├── uv.lock
+└── README.md
 ```
 
-## Directory Guide
+주요 디렉터리 역할은 다음과 같습니다.
 
-- `backend/`: 백엔드 애플리케이션 코드
-- `frontend/`: 프론트엔드 애플리케이션 코드
-- `database/`: DB schema, migration, seed, ERD 관련 파일
-- `models/`: AI 모델, 학습/추론 관련 파일
-- `docs/`: 프로젝트 산출물, 외부 공유 문서
-- `wiki/`: 팀 내부 규칙과 개발 컨벤션
-- `.github/`: GitHub template, workflow, automation 설정
+- `crawling/`: 국가별 데이터 취득 코드입니다. 크롤러 전용 `uv` 프로젝트가 따로 있습니다.
+- `data/`: 로컬 데이터 작업 공간입니다. 실제 수집 산출물과 캐시는 Git에 올리지 않습니다.
+- `docs/specs/`: 데이터 파이프라인과 ELT 설계 문서입니다.
+- `infrastructure/terraform/`: AWS 리소스 IaC입니다.
+- `src/kr_details_pipeline/`: S3 Raw 업로드, Transform, Load, Lambda handler 코드입니다.
+- `wiki/`: 팀 규칙과 개발 컨벤션 문서입니다.
 
-## Wiki
+## Environment
 
-프로젝트 규칙은 `wiki/` 아래 mdBook 문서로 관리합니다.
+루트 `.env`에는 실제 API 키를 넣을 수 있지만 Git에 커밋하지 않습니다. 필요한 형식은 [.env.example](./.env.example)을 기준으로 맞춥니다.
 
-주요 문서:
+```env
+TOUR_API_KEYS=decoded_tour_api_key_1,decoded_tour_api_key_2
+```
 
-- Git flow
-- Commit convention
-- Naming convention
-- Code style
+Terraform은 `.env`를 자동으로 읽지 않습니다. `infrastructure/terraform/deploy.ps1` 또는 `TF_VAR_*` 환경변수를 사용합니다.
+
+기본 AWS 설정은 현재 개발 기준으로 아래 값을 사용했습니다.
+
+- `AWS_PROFILE`: `skn26_final`
+- `aws_region`: `us-east-1`
+- S3 bucket: `lovv-data-pipeline-dev-925273580929`
+- DynamoDB table: `TourKoreaData`
 
 ## Getting Started
 
-새 프로젝트에서 이 템플릿을 사용할 때는 다음 항목을 먼저 수정합니다.
+루트 파이프라인 개발 환경은 아래 명령으로 준비합니다.
 
-1. 프로젝트명과 설명
-2. 확정된 기술 스택
-3. `wiki/book.toml`의 book title
-4. `wiki/src/overview.md`의 프로젝트 개요
-5. `wiki/src/conventions/`의 팀별 상세 규칙
-6. `.github/workflows/`의 브랜치, secrets, 배포 조건
+```powershell
+uv sync --frozen
+```
 
-## mdBook
+전역 uv 캐시 권한 문제가 있을 때는 워크스페이스 내부 캐시를 지정할 수 있습니다.
 
-github acitons로 인해서 자동으로 deploy까지 가능합니다.
-사용하는 branch는 docs입니다.
+```powershell
+$env:UV_CACHE_DIR = ".cache\uv"
+uv sync --frozen
+```
 
-## GitHub Actions
+크롤러 전용 환경은 `crawling/` 폴더에서 따로 관리합니다.
 
-이 저장소는 GitHub Actions workflow를 통해 다음 작업을 수행할 수 있도록 구성합니다.
+```powershell
+cd crawling
+$env:UV_CACHE_DIR = "..\.cache\uv"
+uv sync --frozen
+```
 
-- mdBook 기반 wiki 배포
-- PR 코드 리뷰 자동화
+## Commands
 
-프로젝트에 맞게 브랜치 이름, secrets, action 버전을 확인한 뒤 사용합니다.
+루트 파이프라인 테스트:
+
+```powershell
+.venv\Scripts\python.exe -m pytest src
+```
+
+크롤러 테스트:
+
+```powershell
+cd crawling
+.venv\Scripts\python.exe -m pytest
+```
+
+전체 테스트를 루트 설정 기준으로 실행할 수도 있습니다.
+
+```powershell
+.venv\Scripts\python.exe -m pytest
+```
+
+Terraform 검증:
+
+```powershell
+cd infrastructure/terraform
+terraform fmt -check
+terraform validate
+terraform plan
+```
+
+## Crawling
+
+`crawling/` 폴더는 JP/KR 도시 데이터 취득 코드를 포함합니다.
+
+- `crawling/KR/city_wikipedia_acquisition.py`: 한국 도시 기본 정보 취득
+- `crawling/KR/tour_api_city_detail_acquisition.py`: TourAPI 도시 상세 데이터 취득
+- `crawling/KR/tour_api_region_detail_acquisition.py`: 지역 단위 TourAPI 상세 데이터 취득
+- `crawling/KR/tour_api_detail_harvester.py`: 참조 레포 산출물을 도시별 상세 JSON으로 정규화
+
+크롤링 산출물은 `data/KR/details/`, `data/KR/detail_cache/` 같은 로컬 경로에 생성되며 Git에서 제외됩니다.
+
+## Raw Ingest
+
+S3 Raw 적재는 루트 패키지의 CLI로 실행합니다.
+
+```powershell
+.venv\Scripts\python.exe -m kr_details_pipeline.cli raw-ingest `
+  --input-dir data/KR/details `
+  --output-dir data/KR/ingest `
+  --bucket lovv-data-pipeline-dev-925273580929 `
+  --profile skn26_final `
+  --region us-east-1 `
+  --ingest-date 20260609
+```
+
+이 단계는 원본 JSON을 `raw/KR/details/<ingest-date>/` Prefix로 업로드하고, 재처리를 위한 checksum manifest를 생성합니다.
+
+## Transform and Load
+
+Transform 단계는 Raw 상세 JSON을 서비스 적재 후보 레코드로 변환합니다.
+
+```powershell
+.venv\Scripts\python.exe -m kr_details_pipeline.cli transform `
+  --raw-dir data/KR/details `
+  --output-dir data/KR/processed `
+  --ingest-date 20260609
+```
+
+Load 단계는 processed payload를 읽어 DynamoDB 적재 후보를 만듭니다.
+
+```powershell
+.venv\Scripts\python.exe -m kr_details_pipeline.cli load `
+  --processed-dir data/KR/processed `
+  --table-name TourKoreaData `
+  --output data/KR/load_candidates.jsonl
+```
+
+AWS Lambda에서는 다음 handler를 사용합니다.
+
+- Transformer: `kr_details_pipeline.handlers.transformer_handler.handler`
+- Loader: `kr_details_pipeline.handlers.loader_handler.handler`
+
+## Terraform
+
+Terraform 코드는 `infrastructure/terraform/`에 있습니다.
+
+현재 구성하는 주요 리소스:
+
+- S3 bucket: Raw/Processed/Failed/Review/Quality Prefix를 사용하는 파이프라인 저장소
+- DynamoDB: `TourKoreaData`
+- IAM Role/Policy: Lambda 실행 및 S3/DynamoDB 접근 권한
+- CloudWatch Log Group: `kr-raw-ingest`, `kr-transformer`, `kr-loader`
+- Lambda: `kr-transformer`, `kr-loader`
+
+PowerShell에서 `.env` 기반으로 실행할 때:
+
+```powershell
+cd infrastructure/terraform
+Copy-Item .env.example .env -Force
+.\deploy.ps1 -Action plan
+.\deploy.ps1 -Action apply
+```
+
+직접 환경변수로 실행할 때:
+
+```powershell
+cd infrastructure/terraform
+$env:AWS_PROFILE = "skn26_final"
+$env:TF_VAR_aws_profile = "skn26_final"
+$env:TF_VAR_aws_region = "us-east-1"
+$env:TF_VAR_env = "dev"
+$env:TF_VAR_bucket_base_name = "lovv-data-pipeline"
+$env:TF_VAR_dynamodb_table_name = "TourKoreaData"
+terraform init
+terraform plan
+terraform apply
+```
+
+## Data and Git Hygiene
+
+실제 수집 데이터, API 응답, Lambda ZIP, Terraform state, `.env`, 가상환경은 Git에 올리지 않습니다.
+
+대표적으로 제외되는 항목:
+
+- `.env`
+- `.venv/`
+- `crawling/.venv/`
+- `data/KR/details/`
+- `data/KR/detail_cache/`
+- `data/KR/ingest/`
+- `infrastructure/terraform/*.zip`
+- `*.tfstate`
+- `*.tfstate.lock.info`
+- `tmp_*.py`
+- `response*.json`
+
+데이터 디렉터리 자체는 `.gitkeep`만 유지하고, 실제 데이터 파일은 로컬 또는 S3에서 관리합니다.
+
+## Documentation
+
+주요 설계 문서는 아래 파일을 기준으로 확인합니다.
+
+- [docs/data_pipeline_prd.md](./docs/data_pipeline_prd.md)
+- [docs/specs/data_pipeline_spec.md](./docs/specs/data_pipeline_spec.md)
+- [docs/specs/kr_details_elt_spec.md](./docs/specs/kr_details_elt_spec.md)
+- [infrastructure/terraform/README.md](./infrastructure/terraform/README.md)
 
 ## License
 
