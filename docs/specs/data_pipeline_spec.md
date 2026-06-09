@@ -7,8 +7,9 @@
 
 ## Summary
 
-본 Spec은 `docs/data_pipeline_prd.md`의 KR(강원·경북) 데이터 파이프라인 범위를 구현하기 위한 요구사항을 정리한다.  
-목표는 수집 산출물(`data/raw/final/*`, `data/city/*`, `data/visitor/*`)을 AWS 기반으로 재처리 가능한 형태로 적재하고, 검증/정규화/파생 생성 후 서비스 조회용 단일 테이블에 적재할 수 있게 하는 것이다.  
+본 Spec은 `docs/data_pipeline_prd.md`의 KR(강원·경북) 데이터 파이프라인 범위를 구현하기 위한 요구사항을 정리한다.
+목표는 업스트림 레포(`Gloveman/tour-api-korea`)에서 산출된 정본 파일(`data/raw/final/*`, `data/city/*`, `data/visitor/*`)을 AWS 기반으로 재처리 가능한 형태로 적재하고, 검증/정규화/파생 생성 후 서비스 조회용 단일 테이블에 적재할 수 있게 하는 것이다.
+참조 소스는 `https://github.com/Gloveman/tour-api-korea` (main)로 고정한다.
 요구사항은 **AWS 설정, 코드 구조, 테스트 전략**을 함께 명시한다.
 
 ## Goals
@@ -22,7 +23,7 @@
 ## Phase Goals
 
 - **Phase 0 Goal (현재 범위 우선):** Terraform 기반 IaC로 S3 Raw/Processed/Failed/Review/Quality 기반 인프라를 구축한다.
-- **Phase 1 Goal (요청 반영):** 데이터를 취득(원본 파일/핸드오프)한 뒤 Raw 업로드와 `Data` 저장(`TourKoreaData`)까지 완료한다.
+- **Phase 1 Goal (요청 반영):** 업스트림 레포의 산출물을 수집해 S3 Raw로 적재하고, Transform 후 `Data` 저장(`TourKoreaData`)까지 완료한다.
 
 ## Non-Goals
 
@@ -32,15 +33,16 @@
 
 ## Assumptions
 
-- 수집 산출물은 현재 디렉터리(`data/raw/final`, `data/city`, `data/visitor`)에서 선행 완료 상태라고 가정한다.
+- 취득은 `Gloveman/tour-api-korea`에서 수행되고, 산출물은 이 repo에서 핸드오프된 정본 파일만 본 파이프라인이 소비한다.
+- 산출물 소비 경로는 `data/raw/final/*`, `data/city/*`, `data/visitor/*` 구조를 보장하며, 구조 변경 시 계약 동시 갱신이 필요하다.
 - 런타임은 Python 3.12 기준으로 작성한다.
 - AWS 권한/비밀은 AWS Secrets Manager 또는 시스템 환경변수로 주입한다.
 - PoC 예산 제약(NFR-4)을 벗어나지 않도록 Lambda/Batch 조합 중심으로 구성한다.
 
 ## User Flow
 
-1. 크롤러가 산출물을 `data/...` 경로에 생성한다.
-2. Upload Step에서 해당 파일이 `s3://<pipeline-bucket>/raw/KR/...` Prefix로 versioned 객체로 적재된다.
+1. 업스트림 `Gloveman/tour-api-korea`가 산출물을 `data/...` 구조로 제공한다.
+2. 본 파이프라인은 업스트림 repo 산출물(`Gloveman/tour-api-korea`)을 읽어 `s3://<pipeline-bucket>/raw/KR/...` Prefix에 versioned 객체로 적재한다.
 3. Transform 워커(또는 Step Functions 상태)가 Prefix 단위를 확인해 배치 manifest를 만든다.
 4. Lambda `kr-transformer`가 각 객체를 읽어 schema/필드 정제/좌표·날짜/ID 표준화/신뢰도·파생 필드를 계산한다.
 5. 품질 실패는 `failed/` 및 `review/<queue>` Prefix로 분기한다.
@@ -76,13 +78,14 @@
   - 코드: 수집 산출물을 S3 Raw Prefix로 업로드하는 래퍼(로컬 실행/CI용)
 - `kr-transformer`
   - 구성 예시: 512MB, 300초, `POWERTOOLS_LOG_LEVEL=INFO`, batch size 제한
-  - 트리거: S3 ObjectCreated (raw/KR/*) 또는 Step Functions 입력 manifest
+  - 트리거: 현재 단계는 AWS Lambda Console 수동 Invoke + 수동 manifest 실행 중심(자동화 트리거는 다음 단계에서 단계적 도입)
   - 실패 처리: DLQ(SQS) + failed Prefix 이중 기록
 - `kr-loader`
   - 역할: 검증/정규화 결과를 DynamoDB `TourKoreaData` 조건부 upsert
   - 조건부 쓰기: 핵심필드 변경/신규 시에만 갱신
 - Step Functions(권장) 또는 EventBridge Rule(대체)
   - 권장: `Manifest -> Transform -> Load -> Post-Check` 상태 체인
+  - 현재 단계는 수동 검증 우선으로 Step Functions/EventBridge 자동 오케스트레이션은 보류
 
 ### C. DynamoDB 저장소
 
@@ -119,17 +122,26 @@
   - `backend/data_pipeline/models.py`
   - `backend/data_pipeline/raw_uploader.py`
   - `backend/data_pipeline/transform.py`
-  - `backend/data_pipeline/load.py`
-  - `backend/data_pipeline/cli.py`
+- `backend/data_pipeline/load.py`
+- `backend/data_pipeline/repo_contract.py`
+- `backend/data_pipeline/country_strategies/base.py`
+- `backend/data_pipeline/country_strategies/kr.py`
+- `backend/data_pipeline/cli.py`
   - `backend/data_pipeline/tests/`
 - 배포 패키지: `requirements.txt`에 `boto3`, `pydantic`(또는 `pydantic-core`) 추가
+
+재사용성 요구:
+- 국가별 규칙은 `country_strategies/*`로 분리하고, 공통 파이프라인(업로드/검증/변환/적재/리포트)은 공유한다.
+- JP 추가 시 `kr.py`와 동일한 인터페이스만 구현하면 현재 코드/테스트 골격을 재사용할 수 있도록 구성한다.
 
 ### 2) 데이터 계약 및 변환 규칙 (PRD 기반)
 
 - 입력 스키마
+  - `Gloveman/tour-api-korea`에서 제공하는 아래 파일:
   - `data/raw/final/{city_en}.json`
   - `data/city/{city_en}.json`
   - `data/visitor/monthly_visitor_averages.json`
+  - 선택: `data/contact_overrides.json`(tel/보정 데이터)
 - 출력/중간 산출물
   - ELT 규칙에 따른 정규화 JSON
   - `review/*` 큐 payload
@@ -286,7 +298,7 @@
 
 ## Open Questions
 
-1. `raw` 적재는 완전 수동 업로드 기반으로 시작할지, S3 Event 기반 업로드를 즉시 자동화할지?
-2. `LovvDataQuality`와 `TourKoreaData`를 단일 테이블로 유지할지 분리할지?
-3. 리뷰 큐 처리자는 수동 운영인지 자동 worker를 둘지?
-4. JP 데이터 수집/전처리/적재 범위와 우선순위를 언제 어떤 순서로 확정할지?
+1. 지금 단계는 업스트림 산출물 반영 및 S3 업로드를 수동으로 운영하고, Lambda는 **AWS Lambda Console 수동 Invoke**로 실행한다.
+2. [DB 설계 v0.5 기준] `LovvDataQuality` 단일테이블/별도테이블 정의는 없다. 수집 정규화 저장은 `lovv_content_documents`(City/Attraction/Festival)와 `lovv_visitor_statistics`로 분리하고, 품질 상태는 각 항목의 `quality_status` 및 검수 큐 운영 처리로 대응한다(`TourKoreaData` 단일 테이블 가정과 불일치). 구현 전 PRD·DB 설계 동기화 필요
+3. 리뷰 큐 처리자는 현재 미정.
+4. JP는 한국 데이터 구현이 원하는 방향으로 완료되면 즉시 시작한다. 단, KR 검증 항목 수렴 후 오케스트레이션/테이블 정책을 재확인한다.
