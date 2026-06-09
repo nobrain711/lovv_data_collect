@@ -223,6 +223,13 @@ __marimo__/
 *.tfstate.backup
 *.tfplan
 *.terraform.lock.hcl
+infrastructure/terraform/*.zip
+
+# Local smoke-test artifacts
+/tmp_*.py
+/tmp_phase1_*/
+/response*.json
+/andong.json
 
 # Generated data artifacts
 /data/**
