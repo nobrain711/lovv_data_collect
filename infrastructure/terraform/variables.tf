@@ -67,6 +67,12 @@ variable "dynamodb_table_name" {
   default     = "TourKoreaData"
 }
 
+variable "domain_dynamodb_table_name" {
+  description = "DynamoDB table name for domain-separated KR content data."
+  type        = string
+  default     = "TourKoreaDomainData"
+}
+
 # -----------------------------------------------------------------------------
 # 리소스 공통 태그
 # -----------------------------------------------------------------------------

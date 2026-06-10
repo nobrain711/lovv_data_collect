@@ -14,9 +14,10 @@ data "aws_caller_identity" "current" {}
 locals {
   bucket_name = "${var.bucket_base_name}-${var.env}-${data.aws_caller_identity.current.account_id}"
   lambda_names = {
-    raw_ingest  = "kr-raw-ingest"
-    transformer = "kr-transformer"
-    loader      = "kr-loader"
+    raw_ingest    = "kr-raw-ingest"
+    transformer   = "kr-transformer"
+    loader        = "kr-loader"
+    domain_loader = "kr-domain-loader"
   }
   base_tags = merge(var.tags, { env = var.env })
 }
@@ -132,6 +133,72 @@ resource "aws_dynamodb_table" "tourkorea_data" {
   tags = merge(local.base_tags, { Name = var.dynamodb_table_name })
 }
 
+resource "aws_dynamodb_table" "tourkorea_domain_data" {
+  # 음식점/관광지/축제를 분리한 전처리 결과를 적재하는 신규 도메인 테이블입니다.
+  # 기존 TourKoreaData와 분리해 혼합 스키마 영향을 격리합니다.
+  name           = var.domain_dynamodb_table_name
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "PK"
+  range_key      = "SK"
+  stream_enabled = false
+
+  attribute {
+    name = "PK"
+    type = "S"
+  }
+
+  attribute {
+    name = "SK"
+    type = "S"
+  }
+
+  attribute {
+    name = "entity_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "entity_type"
+    type = "S"
+  }
+
+  attribute {
+    name = "city_key"
+    type = "S"
+  }
+
+  attribute {
+    name = "domain_sort_key"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "GSI1"
+    hash_key        = "entity_id"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "GSI2"
+    hash_key        = "entity_type"
+    range_key       = "SK"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "GSI3"
+    hash_key        = "city_key"
+    range_key       = "domain_sort_key"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  tags = merge(local.base_tags, { Name = var.domain_dynamodb_table_name, schema = "domain-separated" })
+}
+
 resource "aws_iam_role" "pipeline_lambda_role" {
   # Lambda 실행 역할. Lambda 서비스가 AssumeRole로 사용합니다.
   name = "lovv-data-pipeline-lambda-${var.env}"
@@ -170,14 +237,20 @@ resource "aws_iam_role_policy" "pipeline_lambda_policy" {
           "dynamodb:DeleteItem",
           "dynamodb:Query"
         ]
-        Resource = aws_dynamodb_table.tourkorea_data.arn
+        Resource = [
+          aws_dynamodb_table.tourkorea_data.arn,
+          aws_dynamodb_table.tourkorea_domain_data.arn
+        ]
       },
       {
         Effect = "Allow"
         Action = [
           "dynamodb:DescribeTable"
         ]
-        Resource = aws_dynamodb_table.tourkorea_data.arn
+        Resource = [
+          aws_dynamodb_table.tourkorea_data.arn,
+          aws_dynamodb_table.tourkorea_domain_data.arn
+        ]
       },
       {
         Effect = "Allow"
@@ -220,6 +293,12 @@ resource "aws_cloudwatch_log_group" "lambda_transformer" {
 resource "aws_cloudwatch_log_group" "lambda_loader" {
   # loader Lambda 런타임 로그. 보관 기간은 14일.
   name              = "/aws/lambda/${local.lambda_names.loader}"
+  retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "lambda_domain_loader" {
+  # domain-loader Lambda 런타임 로그. 보관 기간은 14일.
+  name              = "/aws/lambda/${local.lambda_names.domain_loader}"
   retention_in_days = 14
 }
 
@@ -275,5 +354,29 @@ resource "aws_lambda_function" "kr_loader" {
 
   depends_on = [
     aws_iam_role_policy.pipeline_lambda_policy,
+  ]
+}
+
+resource "aws_lambda_function" "kr_domain_loader" {
+  function_name    = local.lambda_names.domain_loader
+  description      = "KR domain loader Lambda for manual raw JSON preprocessing and DynamoDB load"
+  role             = aws_iam_role.pipeline_lambda_role.arn
+  handler          = "kr_details_pipeline.handlers.domain_loader_handler.handler"
+  runtime          = "python3.12"
+  timeout          = 300
+  memory_size      = 512
+  filename         = data.archive_file.kr_pipeline_lambda.output_path
+  source_code_hash = data.archive_file.kr_pipeline_lambda.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE   = var.domain_dynamodb_table_name
+      PROCESSED_PREFIX = "${var.processed_data_prefix}/domain"
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy.pipeline_lambda_policy,
+    aws_cloudwatch_log_group.lambda_domain_loader,
   ]
 }
