@@ -216,3 +216,26 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+*.tfplan
+*.terraform.lock.hcl
+infrastructure/terraform/*.zip
+
+# Local smoke-test artifacts
+/tmp_*.py
+/tmp_phase1_*/
+/response*.json
+/andong.json
+
+# Generated data artifacts
+/data/**
+!/data/
+!/data/**/
+!/data/**/.gitkeep
+/data/KR/detail_cache/**
+/data/KR/details/**
