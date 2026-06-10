@@ -14,9 +14,6 @@ data "aws_caller_identity" "current" {}
 locals {
   bucket_name = "${var.bucket_base_name}-${var.env}-${data.aws_caller_identity.current.account_id}"
   lambda_names = {
-    raw_ingest    = "kr-raw-ingest"
-    transformer   = "kr-transformer"
-    loader        = "kr-loader"
     domain_loader = "kr-domain-loader"
   }
   base_tags = merge(var.tags, { env = var.env })
@@ -237,20 +234,14 @@ resource "aws_iam_role_policy" "pipeline_lambda_policy" {
           "dynamodb:DeleteItem",
           "dynamodb:Query"
         ]
-        Resource = [
-          aws_dynamodb_table.tourkorea_data.arn,
-          aws_dynamodb_table.tourkorea_domain_data.arn
-        ]
+        Resource = aws_dynamodb_table.tourkorea_domain_data.arn
       },
       {
         Effect = "Allow"
         Action = [
           "dynamodb:DescribeTable"
         ]
-        Resource = [
-          aws_dynamodb_table.tourkorea_data.arn,
-          aws_dynamodb_table.tourkorea_domain_data.arn
-        ]
+        Resource = aws_dynamodb_table.tourkorea_domain_data.arn
       },
       {
         Effect = "Allow"
@@ -278,24 +269,6 @@ resource "aws_iam_role_policy" "pipeline_lambda_policy" {
   })
 }
 
-resource "aws_cloudwatch_log_group" "lambda_raw_ingest" {
-  # raw_ingest Lambda 런타임 로그. 보관 기간은 14일.
-  name              = "/aws/lambda/${local.lambda_names.raw_ingest}"
-  retention_in_days = 14
-}
-
-resource "aws_cloudwatch_log_group" "lambda_transformer" {
-  # transformer Lambda 런타임 로그. 보관 기간은 14일.
-  name              = "/aws/lambda/${local.lambda_names.transformer}"
-  retention_in_days = 14
-}
-
-resource "aws_cloudwatch_log_group" "lambda_loader" {
-  # loader Lambda 런타임 로그. 보관 기간은 14일.
-  name              = "/aws/lambda/${local.lambda_names.loader}"
-  retention_in_days = 14
-}
-
 resource "aws_cloudwatch_log_group" "lambda_domain_loader" {
   # domain-loader Lambda 런타임 로그. 보관 기간은 14일.
   name              = "/aws/lambda/${local.lambda_names.domain_loader}"
@@ -307,54 +280,6 @@ data "archive_file" "kr_pipeline_lambda" {
   type        = "zip"
   source_dir  = "${path.module}/../../src"
   output_path = "${path.module}/kr_pipeline_lambda.zip"
-}
-
-resource "aws_lambda_function" "kr_transformer" {
-  # PRD의 kr-transformer를 수동 실행 가능한 스모크 함수로 먼저 배포합니다.
-  function_name    = local.lambda_names.transformer
-  description      = "KR transformer smoke Lambda (manual invoke)"
-  role             = aws_iam_role.pipeline_lambda_role.arn
-  handler          = "kr_details_pipeline.handlers.transformer_handler.handler"
-  runtime          = "python3.12"
-  timeout          = 300
-  memory_size      = 512
-  filename         = data.archive_file.kr_pipeline_lambda.output_path
-  source_code_hash = data.archive_file.kr_pipeline_lambda.output_base64sha256
-
-  environment {
-    variables = {
-      RAW_PREFIX       = "${var.raw_data_prefix}/details"
-      PROCESSED_PREFIX = var.processed_data_prefix
-    }
-  }
-
-  depends_on = [
-    aws_iam_role_policy.pipeline_lambda_policy,
-  ]
-}
-
-resource "aws_lambda_function" "kr_loader" {
-  function_name    = local.lambda_names.loader
-  description      = "KR loader Lambda for phase1"
-  role             = aws_iam_role.pipeline_lambda_role.arn
-  handler          = "kr_details_pipeline.handlers.loader_handler.handler"
-  runtime          = "python3.12"
-  timeout          = 900
-  memory_size      = 512
-  filename         = data.archive_file.kr_pipeline_lambda.output_path
-  source_code_hash = data.archive_file.kr_pipeline_lambda.output_base64sha256
-
-  environment {
-    variables = {
-      DEBUG_LOAD_FAILURES = "1"
-      PROCESSED_PREFIX    = var.processed_data_prefix
-      DYNAMODB_TABLE      = var.dynamodb_table_name
-    }
-  }
-
-  depends_on = [
-    aws_iam_role_policy.pipeline_lambda_policy,
-  ]
 }
 
 resource "aws_lambda_function" "kr_domain_loader" {
