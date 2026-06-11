@@ -1,9 +1,4 @@
-from kr_vector_index.console_test import (
-    TEST_VECTOR_KEY,
-    build_float32_vector,
-    build_query_vector,
-    build_test_vectors,
-)
+from kr_vector_index.console_test import TEST_VECTOR_KEY, build_float32_vector, build_query_vector, build_test_vectors
 
 
 def test_build_test_vectors_matches_s3vectors_shape() -> None:
@@ -39,3 +34,12 @@ def test_build_float32_vector_supports_default_index_dimension() -> None:
     assert len(vector) == 1024
     assert vector[0] == 0.5
     assert vector[-1] > 0
+
+
+def test_console_test_module_has_no_delete_vector_command() -> None:
+    import inspect
+    import kr_vector_index.console_test as console_test
+
+    source = inspect.getsource(console_test)
+
+    assert "delete-vectors" not in source

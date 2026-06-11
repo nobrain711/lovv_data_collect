@@ -4,9 +4,10 @@ Use this script from AWS CloudShell, PowerShell, or any terminal where AWS CLI v
 
 ## Purpose
 
-The smoke test writes one deterministic test vector to `lovv-vector-dev/kr-tour-domain-v1`, queries it back, and deletes it.
+The smoke test writes one deterministic test vector to `lovv-vector-dev/kr-tour-domain-v1` and queries it back.
 
 It does not use real Lovv content data or embeddings.
+It keeps the vector by default so it remains visible in the console.
 
 ## Run
 
@@ -33,23 +34,9 @@ key: console-test#smoke#0001
 The script should finish with:
 
 ```text
-Deleted test vector: console-test#smoke#0001
+Kept test vector: console-test#smoke#0001
 ```
 
-## Keep the Test Vector
+## Cleanup
 
-Only for manual inspection:
-
-```bash
-python src/kr_vector_index/console_test.py --keep-vector
-```
-
-If you use `--keep-vector`, delete the vector after inspection:
-
-```bash
-aws s3vectors delete-vectors \
-  --vector-bucket-name lovv-vector-dev \
-  --index-name kr-tour-domain-v1 \
-  --keys console-test#smoke#0001 \
-  --region us-east-1
-```
+This script does not delete vectors. Cleanup must be a separate, explicitly reviewed operation.

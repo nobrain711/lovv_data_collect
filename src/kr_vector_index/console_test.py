@@ -1,8 +1,8 @@
 """Console-friendly smoke test for the KR S3 Vector index.
 
-This script writes one deterministic test vector, queries it back, and deletes
-it. It uses AWS CLI `s3vectors` so it can run in AWS CloudShell or a local
-terminal without depending on boto3 service model freshness.
+This script writes one deterministic test vector and queries it back. It does
+not delete vectors. It uses AWS CLI `s3vectors` so it can run in AWS CloudShell
+or a local terminal without depending on boto3 service model freshness.
 """
 
 from __future__ import annotations
@@ -120,21 +120,7 @@ def run_smoke_test(args: argparse.Namespace) -> None:
         if TEST_VECTOR_KEY not in query.stdout:
             raise RuntimeError(f"query-vectors did not return {TEST_VECTOR_KEY}")
 
-        if args.keep_vector:
-            print(f"Kept test vector: {TEST_VECTOR_KEY}")
-            return
-
-        delete = run_command(
-            [
-                *base,
-                "delete-vectors",
-                *target,
-                "--keys",
-                TEST_VECTOR_KEY,
-            ]
-        )
-        ensure_success("delete-vectors", delete)
-        print(f"Deleted test vector: {TEST_VECTOR_KEY}")
+        print(f"Kept test vector: {TEST_VECTOR_KEY}")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -144,7 +130,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--region", default="us-east-1")
     parser.add_argument("--profile", default=None)
     parser.add_argument("--dimension", type=int, default=1024)
-    parser.add_argument("--keep-vector", action="store_true", help="Do not delete the test vector after query.")
     return parser.parse_args(argv)
 
 

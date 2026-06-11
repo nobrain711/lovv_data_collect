@@ -56,7 +56,7 @@ aws iam simulate-principal-policy --policy-source-arn arn:aws:iam::925273580929:
 | Terraform validate | Passed |
 | Terraform IAM apply | Success: 4 resources added, 0 changed, 0 destroyed |
 | Reader policy simulation | `s3vectors:QueryVectors` allowed, `s3vectors:PutVectors` implicit deny |
-| Writer policy simulation | `s3vectors:QueryVectors`, `s3vectors:PutVectors`, `s3vectors:DeleteVectors` allowed |
+| Writer policy simulation | `s3vectors:QueryVectors` and `s3vectors:PutVectors` allowed; `s3vectors:DeleteVectors` implicit deny after cleanup hardening |
 
 ## Evidence
 

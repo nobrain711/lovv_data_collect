@@ -40,6 +40,18 @@ output "kr_domain_loader_lambda_arn" {
   value       = aws_lambda_function.kr_domain_loader.arn
 }
 
+output "kr_vector_index_lambda_name" {
+  # S3 Vector index build Lambda function name.
+  description = "Name of deployed KR vector index Lambda function."
+  value       = aws_lambda_function.kr_vector_index.function_name
+}
+
+output "kr_vector_index_lambda_arn" {
+  # kr-vector-index Lambda ARN.
+  description = "ARN of deployed KR vector index Lambda function."
+  value       = aws_lambda_function.kr_vector_index.arn
+}
+
 output "vector_bucket_name" {
   # S3 Vector bucket name used by the KR vector index.
   description = "S3 Vector bucket name for KR vector indexes."
