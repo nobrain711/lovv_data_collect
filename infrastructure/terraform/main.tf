@@ -16,7 +16,9 @@ locals {
   lambda_names = {
     domain_loader = "kr-domain-loader"
   }
-  base_tags = merge(var.tags, { env = var.env })
+  vector_bucket_arn   = "arn:aws:s3vectors:${var.aws_region}:${data.aws_caller_identity.current.account_id}:bucket/${var.vector_bucket_name}"
+  kr_vector_index_arn = "${local.vector_bucket_arn}/index/${var.kr_vector_index_name}"
+  base_tags           = merge(var.tags, { env = var.env })
 }
 
 resource "aws_s3_bucket" "pipeline" {
@@ -220,6 +222,99 @@ resource "aws_iam_role_policy" "pipeline_lambda_policy" {
   })
 }
 
+resource "aws_iam_role" "s3_vector_index_writer_role" {
+  # S3 Vector index build pipeline role. It can write/delete vectors and run verification queries.
+  name = "lovv-vector-index-writer-${var.env}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.base_tags, { Name = "lovv-vector-index-writer-${var.env}", scope = "s3-vector-writer" })
+}
+
+resource "aws_iam_role_policy" "s3_vector_index_writer_policy" {
+  # Writer can build, repair, and verify the vector index, but cannot create/delete vector buckets or indexes.
+  name = "lovv-vector-index-writer-policy-${var.env}"
+  role = aws_iam_role.s3_vector_index_writer_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3vectors:GetVectorBucket",
+          "s3vectors:GetIndex",
+          "s3vectors:ListIndexes",
+          "s3vectors:ListVectors",
+          "s3vectors:GetVectors",
+          "s3vectors:QueryVectors",
+          "s3vectors:PutVectors",
+          "s3vectors:DeleteVectors"
+        ]
+        Resource = [
+          local.vector_bucket_arn,
+          local.kr_vector_index_arn
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "s3_vector_index_reader_role" {
+  # Candidate Evidence Agent retrieval role. It can query the index but cannot mutate vectors.
+  name = "lovv-vector-index-reader-${var.env}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.base_tags, { Name = "lovv-vector-index-reader-${var.env}", scope = "s3-vector-reader" })
+}
+
+resource "aws_iam_role_policy" "s3_vector_index_reader_policy" {
+  # Reader is intentionally query-only for CEA retrieval. Mutating actions are excluded.
+  name = "lovv-vector-index-reader-policy-${var.env}"
+  role = aws_iam_role.s3_vector_index_reader_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3vectors:GetVectorBucket",
+          "s3vectors:GetIndex",
+          "s3vectors:QueryVectors"
+        ]
+        Resource = [
+          local.vector_bucket_arn,
+          local.kr_vector_index_arn
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_cloudwatch_log_group" "lambda_domain_loader" {
   # domain-loader Lambda 런타임 로그. 보관 기간은 14일.
   name              = "/aws/lambda/${local.lambda_names.domain_loader}"
@@ -234,6 +329,7 @@ data "archive_file" "kr_pipeline_lambda" {
   excludes = [
     "**/__pycache__/**",
     "**/tests/**",
+    "kr_vector_index/**",
   ]
 }
 

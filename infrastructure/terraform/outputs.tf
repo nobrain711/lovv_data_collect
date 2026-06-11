@@ -39,3 +39,33 @@ output "kr_domain_loader_lambda_arn" {
   description = "ARN of deployed KR domain loader Lambda function."
   value       = aws_lambda_function.kr_domain_loader.arn
 }
+
+output "vector_bucket_name" {
+  # S3 Vector bucket name used by the KR vector index.
+  description = "S3 Vector bucket name for KR vector indexes."
+  value       = var.vector_bucket_name
+}
+
+output "kr_vector_index_name" {
+  # S3 Vector index name used for KR tourism domain search.
+  description = "S3 Vector index name for KR tourism domain data."
+  value       = var.kr_vector_index_name
+}
+
+output "kr_vector_index_arn" {
+  # S3 Vector index ARN for writer/reader policy references.
+  description = "ARN of the KR S3 Vector index."
+  value       = local.kr_vector_index_arn
+}
+
+output "s3_vector_index_writer_role_arn" {
+  # Role for index build/upsert jobs.
+  description = "IAM role ARN for S3 Vector index writer jobs."
+  value       = aws_iam_role.s3_vector_index_writer_role.arn
+}
+
+output "s3_vector_index_reader_role_arn" {
+  # Role for Candidate Evidence Agent retrieval queries.
+  description = "IAM role ARN for S3 Vector index reader queries."
+  value       = aws_iam_role.s3_vector_index_reader_role.arn
+}
