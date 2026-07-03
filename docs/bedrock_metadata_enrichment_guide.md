@@ -9,15 +9,23 @@
 2. 매핑 또는 계산으로 생성하는 결정론적 메타데이터
 3. Bedrock LLM으로 추출하는 의미 기반 메타데이터
 
-현재 구현을 직접 변경하지 않고, fork 또는 별도 작업 브랜치에서 적용하기
-위한 설계·적용 가이드다.
+현재 기준으로는 설계 가이드이면서 구현 추적 문서다. 아래 모듈은 이미
+저장소 코드에 들어와 있으므로, 새 작업자는 부록의 standalone 예제보다
+현재 모듈을 먼저 확인해야 한다.
 
-참고 구현:
+현재 구현:
 
-- 부록 B: 관광지 메타데이터 보강 참고 구현 (`bedrock_metadata_enrichment.py` 전문 포함)
-- 부록 C: 축제 테마 재분류 참고 구현 (`bedrock_festival_theme_reclassification.py` 전문 포함)
+- `src/kr_details_pipeline/enrichment_engine.py`
+- `src/kr_details_pipeline/theme_classifier.py`
+- `src/kr_details_pipeline/bedrock_json.py`
+- `src/kr_details_pipeline/festival_theme_persistence.py`
+- `scripts/backfill_enrichment.py`
+- `scripts/backfill_festival_themes.py`
 - `src/kr_details_pipeline/domain_preprocess.py`
 - `src/kr_vector_index/metadata.py`
+
+부록 B/C는 계약 설명용 legacy 예제다. 운영 코드는 위 현재 구현 모듈을
+기준으로 한다.
 
 식당은 식당별 적재 대상에서 제외하므로 다루지 않는다. 도시는 현재 LLM
 enrichment 대상이 아니다. 축제는 관광지 metadata enrichment와 분리된 테마
@@ -473,7 +481,13 @@ theme_tags = validated multi-label theme_tags
 `예술·감성` 편향이 다시 발생한다. 운영 배치에서는 실패 item을 review queue로
 보내고, 검수 또는 재호출이 끝난 축제만 테마 기반 검색 seed에 사용한다.
 
-참고 구현은 본 문서의 '부록 C: 축제 테마 재분류 참고 구현'을 참고한다.
+현재 구현은 `src/kr_details_pipeline/theme_classifier.py`와
+`src/kr_details_pipeline/festival_theme_persistence.py`가 담당한다.
+`scripts/backfill_festival_themes.py`는 `TourKoreaDomainDataV2`의
+`EntityTypeDomainIndex`에서 `festival` item을 읽고, 성공 시 `theme`,
+`theme_tags`, `festival_theme_classification`을 함께 갱신한다. 실패 또는
+`review_required` 상태에서는 기존 `theme`/`theme_tags`를 덮어쓰지 않고
+`festival_theme_classification`만 기록한다.
 
 ## 4. 권장 DynamoDB 구조
 
@@ -674,8 +688,11 @@ FESTIVAL_THEME_MAX_ITEMS=100
 ```
 
 GPT-OSS처럼 reasoning token을 사용하는 모델은 최종 JSON 이전에 토큰을
-소비할 수 있다. 참고 구현은 `maxTokens=1200`을 사용하며 운영 latency와
-출력 길이를 측정해 조정한다.
+소비할 수 있다. 현재 운영 기본 모델은 `openai.gpt-oss-120b-1:0`이며,
+토큰 상한은 관광지 enrichment가 `maxTokens=4096`, 축제 테마 분류가
+`maxTokens=1024`다. 모델 응답은 `src/kr_details_pipeline/bedrock_json.py`의
+공통 파서가 처리한다. 이 파서는 markdown code fence, JSON 앞뒤 설명문,
+trailing comma를 허용하되 최종 결과는 JSON object여야 한다.
 
 ## 9. IAM 권한
 

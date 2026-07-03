@@ -450,3 +450,5 @@ Query embedding:
 6. Expect vector count to equal unique vector key count, not raw export count.
 7. Check `processed/KR/details/vector/manifests/latest.json` before reporting vector rebuild completion.
 8. Do not use old V1 paths such as `kr-tour-domain-v1` or `processed/KR/vector/manifests/latest.json` for the V2 state.
+9. Bedrock enrichment and festival theme backfills update DynamoDB first. S3 Vector metadata reflects those fields only after a deliberate vector rebuild or metadata refresh.
+10. Current Bedrock text-generation defaults are `openai.gpt-oss-120b-1:0`; this is separate from the Titan embedding model used for vector search.

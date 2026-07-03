@@ -141,7 +141,7 @@ dev = [
 ## 알려진 제한사항
 
 1. **Windows tmp_path 권한 이슈**: 기본 Windows temp 경로에서는 `tmp_path` fixture 생성 시 PermissionError가 발생할 수 있다. repo-local `--basetemp .cache\pytest-tmp`와 cacheprovider 비활성화로 회피해 현재 `src` 테스트 185개가 통과했다.
-2. **Bedrock 모델 ID**: 현재 `anthropic.claude-3-haiku-20240307-v1:0`로 설정. 실제 배포 시 사용 가능한 모델로 변경 필요.
+2. **Bedrock 모델 ID**: 현재 코드 기본값은 `openai.gpt-oss-120b-1:0`이다. `anthropic.claude-3-haiku-20240307-v1:0`는 use case 등록이 필요했던 과거 후보 모델로만 남긴다.
 3. **classification_dict.json**: 19개 코드만 포함. 실 데이터에 맞게 확장 필요.
 
 ---
@@ -150,7 +150,7 @@ dev = [
 
 1. Property-based 테스트 구현 (선택적, hypothesis 라이브러리 설치 필요)
 2. `classification_dict.json` 실제 TourAPI 코드로 확장
-3. Bedrock 모델 ID 확정 및 프롬프트 튜닝
+3. GPT-OSS 기준 프롬프트 튜닝과 JSON 파서 회귀 테스트 확대
 4. DynamoDB GSI 인프라 배포 (FestivalMonthIndex)
 5. 파이프라인 통합 테스트 (실제 Bedrock 호출 포함)
 
@@ -399,6 +399,8 @@ Amazon Nova Lite (`amazon.nova-lite-v1:0`) 모델로 실제 DynamoDB 아이템�
 - ✅ 6대 테마 범위 내 분류 (primary_theme + theme_tags 1-3개)
 - ✅ indoor_outdoor 값 검증 통과 (indoor, outdoor, unknown 중 하나)
 - ✅ markdown 코드 펜스 응답 자동 파싱 처리
+- ✅ JSON 앞뒤 설명문과 trailing comma를 `bedrock_json.parse_bedrock_json_object()`에서 공통 처리
+- ✅ 관광지 enrichment는 `maxTokens=4096`, 축제 테마 분류는 `maxTokens=1024`로 설정
 
 ### 사용 모델 참고
 

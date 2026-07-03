@@ -39,6 +39,7 @@
 | --- | --- |
 | [guides/dynamodb_v2_query_guide.md](guides/dynamodb_v2_query_guide.md) | `TourKoreaDomainDataV2` 조회, PK/SK, GSI, `visitor_statistics` 사용 가이드 |
 | [guides/dynamodb_query_guide.md](guides/dynamodb_query_guide.md) | 기존 DynamoDB 조회 패턴 참고 문서 |
+| [bedrock_metadata_enrichment_guide.md](bedrock_metadata_enrichment_guide.md) | 관광지 metadata enrichment, 축제 테마 재분류, Bedrock JSON 파서와 backfill 실행 계약 |
 
 ## Reports
 
